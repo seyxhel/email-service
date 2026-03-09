@@ -2,17 +2,25 @@
 URL routes for the warnings_app API.
 """
 
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from . import views
 
-router = DefaultRouter()
-router.register(r"customers", views.CustomerViewSet, basename="customer")
-router.register(r"warnings", views.WarningLogViewSet, basename="warninglog")
-
 urlpatterns = [
-    path("", include(router.urls)),
-    path("send-warning/", views.send_warning, name="send-warning"),
+    # Auth
+    path("auth/register/", views.register_customer, name="register"),
+    path("auth/login/", views.login_view, name="login"),
+    path("auth/logout/", views.logout_view, name="logout"),
+    path("auth/me/", views.me_view, name="me"),
+
+    # Customers (staff)
+    path("customers/", views.customer_list, name="customer-list"),
+
+    # Messages
+    path("inbox/", views.inbox, name="inbox"),
+    path("messages/<int:pk>/", views.message_detail, name="message-detail"),
+    path("send-message/", views.send_message, name="send-message"),
+
+    # Meta
     path("warning-types/", views.warning_types, name="warning-types"),
     path("stats/", views.dashboard_stats, name="dashboard-stats"),
 ]

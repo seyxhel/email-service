@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { getCustomers, getWarningTypes, sendWarning } from "../api";
+import { getCustomers, getWarningTypes, sendMessage } from "../api";
 
 export default function SendWarning() {
   const [customers, setCustomers] = useState([]);
   const [types, setTypes] = useState([]);
-  const [form, setForm] = useState({ customer_id: "", warning_type: "", subject: "", message: "" });
+  const [form, setForm] = useState({ recipient_id: "", warning_type: "", subject: "", body: "" });
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
 
   useEffect(() => {
-    getCustomers().then((r) => setCustomers(r.data.results || r.data)).catch(() => {});
+    getCustomers().then((r) => setCustomers(r.data)).catch(() => {});
     getWarningTypes().then((r) => setTypes(r.data)).catch(() => {});
   }, []);
 
@@ -18,16 +18,12 @@ export default function SendWarning() {
     setSending(true);
     setMsg({ type: "", text: "" });
     try {
-      const res = await sendWarning({ ...form, customer_id: Number(form.customer_id) });
-      if (res.data.success) {
-        setMsg({ type: "success", text: "Warning email sent successfully!" });
-        setForm({ customer_id: "", warning_type: "", subject: "", message: "" });
-      } else {
-        setMsg({ type: "error", text: `Email delivery failed: ${res.data.warning?.error_detail || "Unknown error"}` });
-      }
+      await sendMessage({ ...form, recipient_id: Number(form.recipient_id) });
+      setMsg({ type: "success", text: "Warning message sent successfully!" });
+      setForm({ recipient_id: "", warning_type: "", subject: "", body: "" });
     } catch (err) {
       const detail = err.response?.data;
-      setMsg({ type: "error", text: detail ? JSON.stringify(detail) : "Error sending warning." });
+      setMsg({ type: "error", text: detail ? JSON.stringify(detail) : "Error sending message." });
     } finally {
       setSending(false);
     }
@@ -44,10 +40,10 @@ export default function SendWarning() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div className="form-group">
               <label>Customer</label>
-              <select required value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })}>
+              <select required value={form.recipient_id} onChange={(e) => setForm({ ...form, recipient_id: e.target.value })}>
                 <option value="">— select customer —</option>
                 {customers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name} ({c.email})</option>
+                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name} ({c.username})</option>
                 ))}
               </select>
             </div>
@@ -67,10 +63,10 @@ export default function SendWarning() {
           </div>
           <div className="form-group">
             <label>Message</label>
-            <textarea required value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+            <textarea required value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
           </div>
           <button type="submit" className="btn btn-danger" disabled={sending}>
-            {sending ? "Sending…" : "Send Warning Email"}
+            {sending ? "Sending…" : "Send Warning"}
           </button>
         </form>
       </div>

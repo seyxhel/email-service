@@ -8,7 +8,7 @@ export default function Dashboard() {
   useEffect(() => {
     getStats()
       .then((res) => setStats(res.data))
-      .catch(() => setError("Failed to load dashboard stats. Make sure you are logged in."));
+      .catch(() => setError("Failed to load dashboard stats."));
   }, []);
 
   if (error) return <div className="alert alert-error">{error}</div>;
@@ -24,26 +24,22 @@ export default function Dashboard() {
           <p>Customers</p>
         </div>
         <div className="stat-card">
-          <h3>{stats.total_warnings}</h3>
-          <p>Total Warnings</p>
+          <h3>{stats.total_messages}</h3>
+          <p>Total Messages</p>
         </div>
         <div className="stat-card">
-          <h3>{stats.sent}</h3>
-          <p>Sent</p>
+          <h3>{stats.read}</h3>
+          <p>Read</p>
         </div>
         <div className="stat-card">
-          <h3>{stats.pending}</h3>
-          <p>Pending</p>
-        </div>
-        <div className="stat-card">
-          <h3>{stats.failed}</h3>
-          <p>Failed</p>
+          <h3>{stats.unread}</h3>
+          <p>Unread</p>
         </div>
       </div>
 
       {stats.by_type.length > 0 && (
         <div className="card">
-          <h2 style={{ marginBottom: 12 }}>Warnings by Type</h2>
+          <h2 style={{ marginBottom: 12 }}>Messages by Type</h2>
           <table>
             <thead>
               <tr><th>Type</th><th>Count</th></tr>

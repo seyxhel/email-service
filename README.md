@@ -1,6 +1,6 @@
-# Customer Warning System
+# Customer Warning System — In-App Messaging Platform
 
-A Django + React system that allows staff to send customer warning/notice emails (reminders, overdue notices, policy violations, etc.) via the **SendGrid** API.
+A self-contained Django + React messaging platform for sending customer warnings and notices. Staff send messages (overdue notices, reminders, policy violations, etc.) to customers who read them within the app — like a lightweight Gmail clone. **No external email APIs or third-party services required.**
 
 ---
 
@@ -10,8 +10,18 @@ A Django + React system that allows staff to send customer warning/notice emails
 |-----------|-----------------------------------|
 | Backend   | Python 3.10+, Django 4.2, DRF     |
 | Database  | SQLite (dev) / PostgreSQL (prod)  |
-| Email     | SendGrid API                      |
-| Frontend  | React 18 (staff dashboard)        |
+| Auth      | Django session authentication      |
+| Frontend  | React 18                          |
+
+---
+
+## How It Works
+
+1. **Customers register** an account through the app.
+2. **Staff log in** and send warning messages to customers (choosing a warning type, subject, and body).
+3. **Customers log in** and see their inbox — unread messages are highlighted.
+4. Opening a message automatically marks it as **read** with a timestamp.
+5. Staff see a **dashboard** with stats (total customers, messages, read/unread counts, breakdown by type).
 
 ---
 
@@ -25,32 +35,33 @@ email service/
 ├── .env                       # Your local config (git-ignored)
 ├── .gitignore
 ├── db.sqlite3                 # SQLite dev database (git-ignored)
-├── test_sendgrid.py           # Quick SendGrid diagnostic script
 ├── warning_system/            # Django project config
 │   ├── settings.py
 │   ├── urls.py
 │   ├── wsgi.py
 │   └── asgi.py
 ├── warnings_app/              # Core Django app
-│   ├── models.py              # Customer + WarningLog models
+│   ├── models.py              # User (custom) + Message models
 │   ├── views.py               # REST API views
 │   ├── serializers.py         # DRF serializers
 │   ├── urls.py                # API URL routes
-│   ├── admin.py               # Django Admin config
-│   └── email_service.py       # SendGrid integration
-└── frontend/                  # React staff dashboard
+│   └── admin.py               # Django Admin config
+└── frontend/                  # React app
     ├── package.json
     ├── public/
     └── src/
-        ├── api.js             # Axios API client
-        ├── App.js             # Root component w/ sidebar nav
+        ├── api.js             # Axios API client + CSRF handling
+        ├── App.js             # Root component (auth flow + routing)
         ├── index.js
         ├── index.css          # Global styles
         └── components/
-            ├── Dashboard.js   # Stats overview
-            ├── Customers.js   # Customer CRUD
-            ├── Warnings.js    # Warning log history
-            └── SendWarning.js # Send warning form
+            ├── Login.js       # Login form
+            ├── Register.js    # Customer registration form
+            ├── Dashboard.js   # Staff stats overview
+            ├── Customers.js   # Customer list (staff)
+            ├── Inbox.js       # Message inbox (customer & staff)
+            ├── MessageView.js # Full message detail view
+            └── SendWarning.js # Send message form (staff)
 ```
 
 ---
@@ -76,20 +87,25 @@ copy .env.example .env       # then edit .env with your values
 
 Edit **`.env`** and set:
 - `SECRET_KEY` — a random Django secret key
-- `SENDGRID_API_KEY` — your SendGrid API key (starts with `SG.`)
-- `DEFAULT_FROM_EMAIL` — verified sender email in SendGrid
+- `DEBUG` — `True` for development
 
 ```bash
-# Run migrations & create a superuser
+# Run migrations & create a staff superuser
 python manage.py migrate
 python manage.py createsuperuser
+```
 
+> After creating the superuser, set their role to "staff" via the Django admin or shell:
+> ```bash
+> python manage.py shell -c "from warnings_app.models import User; u=User.objects.get(username='admin'); u.role='staff'; u.save()"
+> ```
+
+```bash
 # Start the development server
 python manage.py runserver
 ```
 
-The API is available at **http://127.0.0.1:8000/api/**.
-
+The API is available at **http://127.0.0.1:8000/api/**.  
 Admin panel: **http://127.0.0.1:8000/admin/**.
 
 ### 2. Frontend Setup
@@ -100,36 +116,42 @@ npm install
 npm start
 ```
 
-The React dashboard launches at **http://localhost:3000** and proxies API calls to Django.
+The React app launches at **http://localhost:3000** and proxies API calls to Django.
 
-> **Note:** API permissions are set to `AllowAny` for development. For production, switch to `IsAuthenticated` in `warning_system/settings.py` and `warnings_app/views.py`.
+---
+
+## User Roles
+
+| Role       | Capabilities                                              |
+|------------|-----------------------------------------------------------|
+| **staff**  | Dashboard, customer list, send warnings, view sent messages |
+| **customer** | Register, log in, view inbox, read messages              |
 
 ---
 
 ## API Endpoints
 
-| Method | URL                              | Description                       |
-|--------|----------------------------------|-----------------------------------|
-| GET    | `/api/customers/`                | List all customers (searchable)   |
-| POST   | `/api/customers/`                | Create a customer                 |
-| GET    | `/api/customers/{id}/`           | Retrieve a customer               |
-| PUT    | `/api/customers/{id}/`           | Update a customer                 |
-| DELETE | `/api/customers/{id}/`           | Delete a customer                 |
-| GET    | `/api/customers/{id}/warnings/`  | List warnings for a customer      |
-| GET    | `/api/warnings/`                 | List all warning logs (searchable)|
-| GET    | `/api/warnings/{id}/`            | Retrieve a warning log            |
-| POST   | `/api/send-warning/`             | **Send a warning email**          |
-| GET    | `/api/warning-types/`            | List available warning types      |
-| GET    | `/api/stats/`                    | Dashboard summary statistics      |
+| Method | URL                       | Auth      | Description                         |
+|--------|---------------------------|-----------|-------------------------------------|
+| POST   | `/api/auth/register/`     | Public    | Register a new customer account     |
+| POST   | `/api/auth/login/`        | Public    | Log in (returns user data + session)|
+| POST   | `/api/auth/logout/`       | Required  | Log out                             |
+| GET    | `/api/auth/me/`           | Required  | Get current user                    |
+| GET    | `/api/customers/`         | Staff     | List customers (searchable)         |
+| GET    | `/api/inbox/`             | Required  | Customer: received / Staff: sent    |
+| GET    | `/api/messages/{id}/`     | Required  | View message detail (auto-marks read)|
+| POST   | `/api/send-message/`      | Staff     | Send a warning to a customer        |
+| GET    | `/api/warning-types/`     | Required  | List available warning types        |
+| GET    | `/api/stats/`             | Staff     | Dashboard statistics                |
 
-### Send Warning — Request Body
+### Send Message — Request Body
 
 ```json
 {
-  "customer_id": 1,
+  "recipient_id": 1,
   "warning_type": "overdue",
   "subject": "Overdue Payment Notice",
-  "message": "Your account is past due. Please remit payment immediately."
+  "body": "Your account is past due. Please remit payment immediately."
 }
 ```
 
@@ -139,69 +161,40 @@ The React dashboard launches at **http://localhost:3000** and proxies API calls 
 
 ## Database Schema
 
-### Customer
-| Field       | Type         |
-|-------------|--------------|
-| id          | BigAutoField |
-| first_name  | CharField    |
-| last_name   | CharField    |
-| email       | EmailField (unique) |
-| phone       | CharField    |
-| notes       | TextField    |
-| created_at  | DateTime     |
-| updated_at  | DateTime     |
+### User (extends AbstractUser)
+| Field       | Type              |
+|-------------|-------------------|
+| id          | BigAutoField      |
+| username    | CharField (unique)|
+| email       | EmailField        |
+| first_name  | CharField         |
+| last_name   | CharField         |
+| phone       | CharField         |
+| role        | staff / customer  |
+| date_joined | DateTime          |
 
-### WarningLog
-| Field              | Type                |
-|--------------------|---------------------|
-| id                 | BigAutoField        |
-| customer           | FK → Customer       |
-| warning_type       | CharField (choices)  |
-| subject            | CharField           |
-| message            | TextField           |
-| status             | pending / sent / delivered / failed |
-| sendgrid_message_id| CharField           |
-| error_detail       | TextField           |
-| sent_by            | CharField           |
-| sent_at            | DateTime (nullable) |
-| created_at         | DateTime            |
+### Message
+| Field        | Type               |
+|--------------|--------------------|
+| id           | BigAutoField       |
+| sender       | FK → User (staff)  |
+| recipient    | FK → User (customer)|
+| warning_type | CharField (choices) |
+| subject      | CharField          |
+| body         | TextField          |
+| is_read      | BooleanField       |
+| read_at      | DateTime (nullable)|
+| created_at   | DateTime           |
 
 ---
 
-## SendGrid Setup
+## Default Test Account
 
-1. Create a free SendGrid account at https://sendgrid.com.
-2. Go to **Settings → API Keys** and create a key with **Mail Send** permission.
-3. Under **Settings → Sender Authentication**, verify your sender email:
-   - **Single Sender Verification** (quickest): verify one email address — SendGrid sends a confirmation link.
-   - **Domain Authentication** (recommended for production): add SPF, DKIM, and DMARC DNS records for your domain.
-4. Add the API key and verified sender email to your `.env` file.
+A staff admin account is pre-created:
+- **Username:** `admin`
+- **Password:** `admin123`
 
-### Troubleshooting
-
-Run the diagnostic script to test your SendGrid config directly:
-
-```bash
-python test_sendgrid.py
-```
-
-**Common error — 403 Forbidden:**  
-"The from address does not match a verified Sender Identity."  
-→ Make sure `DEFAULT_FROM_EMAIL` in `.env` exactly matches the email you verified in SendGrid.
-
----
-
-## Email Deliverability Tips
-
-To avoid emails landing in spam:
-
-| Priority | Action                                                                 |
-|----------|------------------------------------------------------------------------|
-| 1        | Authenticate your own domain (SPF/DKIM/DMARC) in SendGrid             |
-| 2        | Use neutral subject lines — avoid "WARNING", "URGENT", all-caps       |
-| 3        | Include proper HTML structure with footer and reply instructions       |
-| 4        | Have recipients add the sender address to their contacts               |
-| 5        | Build sender reputation gradually (don't bulk-send on day one)         |
+Register additional customer accounts through the app's registration page.
 
 ---
 
@@ -209,9 +202,7 @@ To avoid emails landing in spam:
 
 - Switch `DATABASES` in `settings.py` to PostgreSQL.
 - Set `DEBUG=False` and configure `ALLOWED_HOSTS`.
-- Change `DEFAULT_PERMISSION_CLASSES` back to `IsAuthenticated` in `settings.py`.
-- Update `permission_classes` in `views.py` from `AllowAny` to `IsAuthenticated`.
 - Use `gunicorn` or `daphne` instead of the development server.
 - Run `python manage.py collectstatic` for serving static files.
-- Consider adding token/JWT authentication for the API.
 - Set a strong, unique `SECRET_KEY`.
+- Consider adding rate limiting to registration and login endpoints.

@@ -1,27 +1,41 @@
 import axios from "axios";
 
-// In development the React dev-server proxies /api to Django (see package.json "proxy").
-// In production, set REACT_APP_API_URL to the Django backend URL.
 const API = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "/api",
-  withCredentials: true,       // send session cookie
+  withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
 
-// ---------- Customers ----------
-export const getCustomers  = (search = "")  => API.get(`/customers/`, { params: { search } });
-export const getCustomer   = (id)           => API.get(`/customers/${id}/`);
-export const createCustomer = (data)        => API.post(`/customers/`, data);
-export const updateCustomer = (id, data)    => API.put(`/customers/${id}/`, data);
-export const deleteCustomer = (id)          => API.delete(`/customers/${id}/`);
+// Attach Django CSRF token to every mutating request
+API.interceptors.request.use((config) => {
+  const csrfToken = getCookie("csrftoken");
+  if (csrfToken && ["post", "put", "patch", "delete"].includes(config.method)) {
+    config.headers["X-CSRFToken"] = csrfToken;
+  }
+  return config;
+});
 
-// ---------- Warnings ----------
-export const getWarnings       = (search = "") => API.get(`/warnings/`, { params: { search } });
-export const getCustomerWarnings = (id)        => API.get(`/customers/${id}/warnings/`);
-export const sendWarning       = (data)        => API.post(`/send-warning/`, data);
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? match[2] : null;
+}
+
+// ---------- Auth ----------
+export const register   = (data)     => API.post("/auth/register/", data);
+export const login      = (data)     => API.post("/auth/login/", data);
+export const logout     = ()         => API.post("/auth/logout/");
+export const getMe      = ()         => API.get("/auth/me/");
+
+// ---------- Customers (staff) ----------
+export const getCustomers = (search = "") => API.get("/customers/", { params: { search } });
+
+// ---------- Messages ----------
+export const getInbox       = ()     => API.get("/inbox/");
+export const getMessage     = (id)   => API.get(`/messages/${id}/`);
+export const sendMessage    = (data) => API.post("/send-message/", data);
 
 // ---------- Meta ----------
-export const getWarningTypes = () => API.get(`/warning-types/`);
-export const getStats        = () => API.get(`/stats/`);
+export const getWarningTypes = () => API.get("/warning-types/");
+export const getStats        = () => API.get("/stats/");
 
 export default API;

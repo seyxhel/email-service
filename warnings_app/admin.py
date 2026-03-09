@@ -3,44 +3,27 @@ Django Admin configuration for the Customer Warning System.
 """
 
 from django.contrib import admin
-from .models import Customer, WarningLog
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from .models import User, Message
 
 
-@admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
-    list_display = ["id", "first_name", "last_name", "email", "phone", "created_at"]
-    list_filter = ["created_at"]
-    search_fields = ["first_name", "last_name", "email"]
-    readonly_fields = ["created_at", "updated_at"]
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    list_display = ["id", "username", "email", "first_name", "last_name", "role", "is_active", "date_joined"]
+    list_filter = ["role", "is_active", "date_joined"]
+    search_fields = ["username", "email", "first_name", "last_name"]
+    fieldsets = BaseUserAdmin.fieldsets + (
+        ("Role", {"fields": ("role", "phone")}),
+    )
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        ("Role", {"fields": ("role", "phone")}),
+    )
 
 
-@admin.register(WarningLog)
-class WarningLogAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "customer",
-        "warning_type",
-        "subject",
-        "status",
-        "sent_by",
-        "sent_at",
-        "created_at",
-    ]
-    list_filter = ["status", "warning_type", "created_at"]
-    search_fields = [
-        "customer__first_name",
-        "customer__last_name",
-        "customer__email",
-        "subject",
-    ]
-    readonly_fields = [
-        "sendgrid_message_id",
-        "error_detail",
-        "sent_at",
-        "created_at",
-    ]
-    raw_id_fields = ["customer"]
-
-    def has_change_permission(self, request, obj=None):
-        # Warning logs are system-generated; prevent manual edits.
-        return False
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ["id", "sender", "recipient", "warning_type", "subject", "is_read", "created_at"]
+    list_filter = ["warning_type", "is_read", "created_at"]
+    search_fields = ["subject", "sender__username", "recipient__username"]
+    readonly_fields = ["created_at", "read_at"]
+    raw_id_fields = ["sender", "recipient"]

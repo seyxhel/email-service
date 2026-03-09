@@ -1,31 +1,39 @@
 """
-Database models for the Customer Warning System.
+Database models for the Customer Warning System — in-app messaging.
 """
 
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 
 
-class Customer(models.Model):
-    """A customer record entered by staff."""
+class User(AbstractUser):
+    """Custom user model supporting both staff and customer roles."""
 
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    email = models.EmailField(unique=True)
+    class Role(models.TextChoices):
+        STAFF = "staff", "Staff"
+        CUSTOMER = "customer", "Customer"
+
+    role = models.CharField(
+        max_length=10,
+        choices=Role.choices,
+        default=Role.CUSTOMER,
+    )
     phone = models.CharField(max_length=20, blank=True, default="")
-    notes = models.TextField(blank=True, default="")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-date_joined"]
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name} ({self.email})"
+        return f"{self.get_full_name() or self.username} ({self.role})"
 
     @property
-    def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+    def is_staff_role(self):
+        return self.role == self.Role.STAFF
+
+    @property
+    def is_customer_role(self):
+        return self.role == self.Role.CUSTOMER
 
 
 class WarningType(models.TextChoices):
@@ -38,17 +46,16 @@ class WarningType(models.TextChoices):
     GENERAL = "general", "General Warning"
 
 
-class WarningLog(models.Model):
-    """Log of every warning email sent to a customer."""
+class Message(models.Model):
+    """An in-app message (warning/notice) sent from staff to a customer."""
 
-    class DeliveryStatus(models.TextChoices):
-        PENDING = "pending", "Pending"
-        SENT = "sent", "Sent"
-        DELIVERED = "delivered", "Delivered"
-        FAILED = "failed", "Failed"
-
-    customer = models.ForeignKey(
-        Customer, on_delete=models.CASCADE, related_name="warnings"
+    sender = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name="sent_messages",
+    )
+    recipient = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name="received_messages",
     )
     warning_type = models.CharField(
         max_length=30,
@@ -56,36 +63,19 @@ class WarningLog(models.Model):
         default=WarningType.GENERAL,
     )
     subject = models.CharField(max_length=255)
-    message = models.TextField(help_text="Body of the warning email.")
-    status = models.CharField(
-        max_length=15,
-        choices=DeliveryStatus.choices,
-        default=DeliveryStatus.PENDING,
-    )
-    sendgrid_message_id = models.CharField(max_length=255, blank=True, default="")
-    error_detail = models.TextField(blank=True, default="")
-    sent_by = models.CharField(
-        max_length=150,
-        blank=True,
-        default="",
-        help_text="Username of the staff member who triggered the warning.",
-    )
-    sent_at = models.DateTimeField(null=True, blank=True)
+    body = models.TextField()
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"[{self.get_warning_type_display()}] → {self.customer.email} ({self.status})"
+        return f"[{self.get_warning_type_display()}] {self.subject} → {self.recipient}"
 
-    def mark_sent(self, message_id: str = ""):
-        self.status = self.DeliveryStatus.SENT
-        self.sendgrid_message_id = message_id
-        self.sent_at = timezone.now()
-        self.save(update_fields=["status", "sendgrid_message_id", "sent_at"])
-
-    def mark_failed(self, error: str = ""):
-        self.status = self.DeliveryStatus.FAILED
-        self.error_detail = error
-        self.save(update_fields=["status", "error_detail"])
+    def mark_read(self):
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=["is_read", "read_at"])

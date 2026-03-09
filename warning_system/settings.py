@@ -15,6 +15,9 @@ DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = ["*"]
 
+# ---------- Custom user model ----------
+AUTH_USER_MODEL = "warnings_app.User"
+
 # ---------- Application definition ----------
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -93,15 +96,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------- REST Framework ----------
 REST_FRAMEWORK = {
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 25,
-    "DEFAULT_PERMISSION_CLASSES": [
-        # Use AllowAny for development; switch to IsAuthenticated in production
-        "rest_framework.permissions.AllowAny",
-    ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
     ],
 }
 
@@ -111,7 +107,3 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 CORS_ALLOW_CREDENTIALS = True
-
-# ---------- SendGrid ----------
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
